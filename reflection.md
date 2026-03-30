@@ -46,13 +46,16 @@
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers three constraints:
+1. **Priority** (high/medium/low) — strict ordering, all high tasks are scheduled before medium, etc.
+2. **Time window** — the owner sets a start and end time; tasks are slotted sequentially within this window.
+3. **Scheduled time preference** — within the same priority level, tasks with an earlier preferred time are scheduled first.
+
+Priority was chosen as the primary constraint because a pet owner's most important tasks (medication, feeding) should never be bumped by lower-priority ones. Time preference is secondary since the daily window is typically short.
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+The scheduler assigns tasks sequentially rather than checking for overlapping duration ranges. This means conflict detection only finds overlaps that occur from the sequential assignment (e.g., over-capacity overflow), not arbitrary user-defined time conflicts. This tradeoff is reasonable because our scheduler controls the assignment — it places tasks one after another, so true overlaps only happen when total duration exceeds the available window. A more complex interval-overlap algorithm would add complexity without benefit for this use case.
 
 ---
 

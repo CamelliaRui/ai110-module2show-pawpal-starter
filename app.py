@@ -9,23 +9,32 @@ st.markdown("A pet care planning assistant that helps you schedule daily tasks f
 
 st.divider()
 
+# --- Step 2: Manage Application Memory ---
+# Store the Owner object in session_state so it persists across reruns.
+# Streamlit reruns the script top-to-bottom on every interaction,
+# so we check if the Owner already exists before creating a new one.
+if "owner" not in st.session_state:
+    st.session_state.owner = Owner("Jordan", [], time(7, 0), time(9, 0))
+
+owner = st.session_state.owner
+
 # --- Owner Info ---
 st.subheader("Owner Info")
 col_owner, col_start, col_end = st.columns(3)
 with col_owner:
-    owner_name = st.text_input("Owner name", value="Jordan")
+    new_name = st.text_input("Owner name", value=owner.name)
+    owner.name = new_name
 with col_start:
-    start_time = st.time_input("Start time", value=time(7, 0))
+    new_start = st.time_input("Start time", value=owner.start_time)
+    owner.start_time = new_start
 with col_end:
-    end_time = st.time_input("End time", value=time(9, 0))
+    new_end = st.time_input("End time", value=owner.end_time)
+    owner.end_time = new_end
 
 st.divider()
 
 # --- Pets ---
 st.subheader("Pets")
-
-if "pets" not in st.session_state:
-    st.session_state.pets = {}  # {pet_name: species}
 
 col_pet, col_species = st.columns(2)
 with col_pet:
@@ -34,16 +43,20 @@ with col_species:
     species = st.selectbox("Species", ["dog", "cat", "other"])
 
 if st.button("Add pet"):
-    if pet_name.lower() in [p.lower() for p in st.session_state.pets]:
+    existing_names = [p.name.lower() for p in owner.pets]
+    if pet_name.lower() in existing_names:
         st.warning(f"A pet named **{pet_name}** already exists.")
     else:
-        st.session_state.pets[pet_name] = species
+        # Wire directly to Owner.add_pet() method
+        owner.add_pet(Pet(pet_name, species))
         st.rerun()
 
-if st.session_state.pets:
+if owner.pets:
     st.write("Your pets:")
-    for name, sp in st.session_state.pets.items():
-        st.markdown(f"- **{name}** ({sp})")
+    for pet in owner.pets:
+        task_count = len(pet.tasks)
+        pending = len(pet.get_pending_tasks())
+        st.markdown(f"- **{pet.name}** ({pet.species}) — {task_count} tasks ({pending} pending)")
 else:
     st.info("No pets yet. Add one above.")
 
@@ -52,11 +65,8 @@ st.divider()
 # --- Tasks ---
 st.subheader("Tasks")
 
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
-
-if st.session_state.pets:
-    pet_options = list(st.session_state.pets.keys())
+if owner.pets:
+    pet_options = [p.name for p in owner.pets]
     col_for, col_title = st.columns(2)
     with col_for:
         task_pet = st.selectbox("For pet", pet_options)
@@ -72,32 +82,43 @@ if st.session_state.pets:
         frequency = st.selectbox("Frequency", ["daily", "weekly", "as_needed"], index=0)
 
     @st.dialog("Duplicate Task")
-    def show_duplicate_warning(title, pet):
-        st.warning(f"A task called **\"{title}\"** for **{pet}** has already been added.")
-        st.write("**Existing tasks:**")
-        st.table(st.session_state.tasks)
+    def show_duplicate_warning(title, pet_nm):
+        st.warning(f"A task called **\"{title}\"** for **{pet_nm}** has already been added.")
         if st.button("OK"):
             st.rerun()
 
     if st.button("Add task"):
-        existing = [(t["title"].lower(), t["pet"].lower()) for t in st.session_state.tasks]
-        if (task_title.lower(), task_pet.lower()) in existing:
+        # Find the Pet object and check for duplicates
+        target_pet = next(p for p in owner.pets if p.name == task_pet)
+        existing_titles = [t.title.lower() for t in target_pet.tasks]
+        if task_title.lower() in existing_titles:
             show_duplicate_warning(task_title, task_pet)
         else:
-            st.session_state.tasks.append({
-                "title": task_title,
-                "duration_minutes": int(duration),
-                "priority": priority,
-                "frequency": frequency,
-                "pet": task_pet,
-            })
+            # Wire directly to Pet.add_task() method
+            target_pet.add_task(Task(
+                task_title, int(duration), priority,
+                frequency=frequency,
+            ))
             st.rerun()
 else:
     st.info("Add a pet first, then you can add tasks.")
 
-if st.session_state.tasks:
+# Display all tasks across all pets
+all_tasks = owner.get_all_tasks()
+if all_tasks:
     st.write("Current tasks:")
-    st.table(st.session_state.tasks)
+    task_data = []
+    for pet in owner.pets:
+        for task in pet.tasks:
+            task_data.append({
+                "pet": pet.name,
+                "title": task.title,
+                "duration": f"{task.duration_minutes} min",
+                "priority": task.priority,
+                "frequency": task.frequency,
+                "status": "done" if task.completed else "pending",
+            })
+    st.table(task_data)
 
 st.divider()
 
@@ -105,25 +126,12 @@ st.divider()
 st.subheader("Daily Schedule")
 
 if st.button("Generate schedule"):
-    if not st.session_state.tasks:
+    if not owner.get_all_pending_tasks():
         st.warning("Add at least one task first.")
-    elif start_time >= end_time:
+    elif owner.start_time >= owner.end_time:
         st.warning("Start time must be before end time.")
     else:
-        # Build Pet objects with their tasks
-        pet_objects = {}
-        for name, sp in st.session_state.pets.items():
-            pet_objects[name] = Pet(name, sp)
-
-        for t in st.session_state.tasks:
-            pet_obj = pet_objects.get(t["pet"])
-            if pet_obj:
-                pet_obj.add_task(Task(
-                    t["title"], t["duration_minutes"], t["priority"],
-                    frequency=t.get("frequency", "daily"),
-                ))
-
-        owner = Owner(owner_name, list(pet_objects.values()), start_time, end_time)
+        # Wire directly to Scheduler — it talks to Owner to get all pet tasks
         schedule = Scheduler(owner).generate_schedule()
 
         if schedule.over_capacity:
