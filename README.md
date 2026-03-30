@@ -42,6 +42,27 @@ PawPal+ includes several algorithmic features beyond basic task listing:
 - **Conflict detection** — The scheduler checks for overlapping time slots and returns warning messages rather than crashing, so the user can resolve issues themselves.
 - **Over-capacity warnings** — If total task duration exceeds the available time window, the schedule is flagged but still displayed in full, letting the user decide what to cut.
 
+## Testing PawPal+
+
+Run the full test suite with:
+
+```bash
+python -m pytest
+```
+
+The test suite (32 tests) covers:
+
+- **Task basics** — completion status, add/remove from pets
+- **Sorting correctness** — priority ordering, time-based sorting, combined priority+time
+- **Sequential time slots** — each task starts where the previous one ended
+- **Filtering** — by pet name, by completion status
+- **Recurring tasks** — daily creates +1 day, weekly creates +7 days, as_needed creates nothing, attributes preserved
+- **Conflict detection** — sequential tasks have no conflicts, display shows conflict text
+- **Over-capacity** — flagged when tasks exceed window, warning in display output
+- **Edge cases** — pet with no tasks, owner with no pets, all tasks completed, two tasks at same time, filter nonexistent pet, complete nonexistent task, task filling exact window
+
+**Confidence Level: 4/5** — The core scheduling logic, sorting, filtering, and recurrence are thoroughly tested. The remaining gap is integration testing of the Streamlit UI layer, which would require a browser-based test framework.
+
 ### Suggested workflow
 
 1. Read the scenario carefully and identify requirements and edge cases.
